@@ -1,0 +1,173 @@
+openapi: 3.0.3
+info:
+  title: Community Health API
+  version: "1.0.0"
+  description: >
+    Generic actor/action/resource moderation, reputation, and trust engine,
+    callable by any platform over plain REST/JSON. This document is the
+    integration contract itself — published and versioned independently of
+    the service's internal implementation (which happens to be Elixir/
+    Phoenix, but nothing here depends on that). See
+    docs/base_content/healthy_community/decoupled_healthy_system.md for the
+    full design and docs/base_content/healthy_community/technologies.md for
+    the stack rationale.
+servers:
+  - url: http://localhost:4100
+    description: Local development (via docker-compose)
+
+security:
+  - platformApiKey: []
+
+tags:
+  - name: health
+    description: Liveness check, unauthenticated
+  - name: communities
+    description: CH-Step 2 — communities and membership, scoped per platform
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Liveness check
+      security: []
+      responses:
+        "200":
+          description: The service is up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /v1/communities:
+    post:
+      tags: [communities]
+      summary: Register (or idempotently re-register) a community for the authenticated platform
+      description: >
+        Idempotent on (platform, external_ref): calling this again with the
+        same external_ref updates the community's name rather than creating
+        a duplicate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommunityRequest"
+      responses:
+        "200":
+          description: The community now exists (created or already did)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Community"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/communities/{community_ref}/members/{actor_ref}:
+    put:
+      tags: [communities]
+      summary: Ensure an actor is a member of a community
+      description: >
+        Idempotent: calling this again for an actor who is already a member
+        is a no-op that still returns 200. The community must already have
+        been registered via POST /v1/communities for this platform.
+      parameters:
+        - name: community_ref
+          in: path
+          required: true
+          description: The calling platform's external_ref for the community
+          schema:
+            type: string
+        - name: actor_ref
+          in: path
+          required: true
+          description: The calling platform's own identifier for the actor (e.g. its internal user id)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The actor is now a member (whether just added or already was)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Membership"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No community with that external_ref is registered for this platform
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    platformApiKey:
+      type: http
+      scheme: bearer
+      description: >
+        The per-platform token issued once by
+        `mix community_health.register_platform "Platform Name"`. Not
+        recoverable after issuance — only its hash is stored.
+
+  responses:
+    Unauthorized:
+      description: Missing, invalid, or revoked API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+
+    CommunityRequest:
+      type: object
+      required: [external_ref, name]
+      properties:
+        external_ref:
+          type: string
+          description: The calling platform's own identifier for this community
+          example: default
+        name:
+          type: string
+          example: Underlined
+
+    Community:
+      type: object
+      required: [id, external_ref, name]
+      properties:
+        id:
+          type: integer
+        external_ref:
+          type: string
+        name:
+          type: string
+
+    Membership:
+      type: object
+      required: [community_external_ref, actor_external_id]
+      properties:
+        community_external_ref:
+          type: string
+        actor_external_id:
+          type: string
+
+    Error:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: object
+          description: 'Field name -> list of error messages, or {"detail": "..."} for non-field errors'

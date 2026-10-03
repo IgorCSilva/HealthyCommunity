@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: community_health
+      POSTGRES_PASSWORD: community_health
+      POSTGRES_DB: community_health_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U community_health -d community_health_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # The Community Health API itself. Deliberately standalone — no other
+  # service here depends on Underlined, and nothing in Underlined's own
+  # docker-compose.yml should ever point at this one directly; they're
+  # wired together only through the HTTP contract described in
+  # docs/base_content/healthy_community/technologies.md.
+  app:
+    build:
+      context: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MIX_ENV: dev
+      DATABASE_URL: ecto://community_health:community_health@postgres/community_health_dev
+      SECRET_KEY_BASE: dev_secret_key_base_change_me_dev_secret_key_base_change_me
+      PHX_HOST: localhost
+      PORT: "4000"
+    ports:
+      - "4100:4000"
+    volumes:
+      - .:/app
+      - app_build:/app/_build
+      - app_deps:/app/deps
+
+  # Interactive API docs for openapi.yaml — the integration contract itself,
+  # hand-maintained as a plain OpenAPI 3.0 file independent of the app's
+  # implementation language. This container only ever reads that file; it
+  # has no dependency on (and no knowledge of) the "app" service above.
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    environment:
+      SWAGGER_JSON: /openapi.yaml
+    volumes:
+      - ./openapi.yaml:/openapi.yaml:ro
+    ports:
+      - "8082:8080"
+
+volumes:
+  pgdata:
+  app_build:
+  app_deps:
