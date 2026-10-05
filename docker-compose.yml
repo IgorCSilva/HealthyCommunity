@@ -29,6 +29,10 @@ services:
     environment:
       MIX_ENV: dev
       DATABASE_URL: ecto://community_health:community_health@postgres/community_health_dev
+      # Deliberately a different URL (and database) than DATABASE_URL above,
+      # so `docker compose exec -e MIX_ENV=test app mix test` never touches
+      # the dev database — same reasoning as Underlined's TEST_DATABASE_URL.
+      TEST_DATABASE_URL: ecto://community_health:community_health@postgres/community_health_test
       SECRET_KEY_BASE: dev_secret_key_base_change_me_dev_secret_key_base_change_me
       PHX_HOST: localhost
       PORT: "4000"

@@ -20,5 +20,8 @@ defmodule CommunityHealthWeb.Router do
 
     post "/communities", CommunityController, :create
     put "/communities/:community_ref/members/:actor_ref", MembershipController, :ensure
+    post "/events", EventController, :create
+    get "/communities/:community_ref/rules", RuleController, :index
+    post "/reports", ReportController, :create
   end
 end

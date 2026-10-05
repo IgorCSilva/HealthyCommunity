@@ -13,10 +13,13 @@ config :community_health, CommunityHealth.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 10
 
-# Lets `docker compose run -e MIX_ENV=test app mix test` point at the
+# Lets `docker compose exec -e MIX_ENV=test app mix test` point at the
 # compose postgres service instead of localhost, same as config/dev.exs.
-if database_url = System.get_env("DATABASE_URL") do
-  config :community_health, CommunityHealth.Repo, url: database_url
+# Deliberately TEST_DATABASE_URL, not DATABASE_URL — the app service's
+# DATABASE_URL is hardcoded to community_health_dev, so honoring it here
+# would make "test" runs silently read/write the dev database.
+if test_database_url = System.get_env("TEST_DATABASE_URL") do
+  config :community_health, CommunityHealth.Repo, url: test_database_url
 end
 
 # We don't run a server during test. If one is required,

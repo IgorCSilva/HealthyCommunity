@@ -64,6 +64,11 @@ defmodule CommunityHealth.Platforms do
 
   def authenticate(_), do: {:error, :invalid_token}
 
+  @doc "Looks up a platform by its unique code, or nil."
+  def get_by_code(code) do
+    Repo.one(from p in Platform, where: p.code == ^code)
+  end
+
   defp generate_token do
     :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
   end
