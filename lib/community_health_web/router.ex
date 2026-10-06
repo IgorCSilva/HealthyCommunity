@@ -23,5 +23,8 @@ defmodule CommunityHealthWeb.Router do
     post "/events", EventController, :create
     get "/communities/:community_ref/rules", RuleController, :index
     post "/reports", ReportController, :create
+    get "/communities/:community_ref/members/:actor_ref/reputation", ReputationController, :show
+    get "/communities/:community_ref/members/:actor_ref/trust", TrustController, :show
+    get "/communities/:community_ref/members/:actor_ref/role-progress/:role_code", RoleController, :role_progress
   end
 end

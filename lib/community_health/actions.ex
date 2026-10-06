@@ -12,6 +12,7 @@ defmodule CommunityHealth.Actions do
   alias CommunityHealth.Communities.Community
   alias CommunityHealth.Platforms.Platform
   alias CommunityHealth.Repo
+  alias CommunityHealth.Reputation
   alias CommunityHealth.Resources
 
   @doc """
@@ -19,14 +20,18 @@ defmodule CommunityHealth.Actions do
   sight. `attrs` requires `:actor_external_id`, `:action_type`,
   `:resource_type`, `:resource_ref`, `:event_key`, and accepts optional
   `:context` (defaults to `%{}`) and `:occurred_at` (defaults to now).
+
+  A genuinely new action (not a replay of an existing event_key) is also
+  checked against CH-Step 8's reputation rules for `community` — see
+  `CommunityHealth.Reputation.record_event_for_action/2`.
   """
-  def record_action(%Platform{id: platform_id} = platform, %Community{id: community_id}, attrs) do
+  def record_action(%Platform{id: platform_id} = platform, %Community{} = community, attrs) do
     with {:ok, resource} <-
            Resources.ensure_resource(platform, attrs.resource_type, attrs.resource_ref) do
       %CommunityAction{}
       |> CommunityAction.changeset(%{
         platform_id: platform_id,
-        community_id: community_id,
+        community_id: community.id,
         resource_id: resource.id,
         actor_external_id: attrs.actor_external_id,
         action_type: attrs.action_type,
@@ -39,11 +44,11 @@ defmodule CommunityHealth.Actions do
         conflict_target: [:platform_id, :event_key],
         returning: true
       )
-      |> fetch_if_conflicted(platform_id, attrs.event_key)
+      |> after_insert(community, platform_id, attrs.event_key)
     end
   end
 
-  defp fetch_if_conflicted({:ok, %CommunityAction{id: nil}}, platform_id, event_key) do
+  defp after_insert({:ok, %CommunityAction{id: nil}}, _community, platform_id, event_key) do
     {:ok,
      Repo.one!(
        from a in CommunityAction,
@@ -51,6 +56,10 @@ defmodule CommunityHealth.Actions do
      )}
   end
 
-  defp fetch_if_conflicted({:ok, action}, _platform_id, _event_key), do: {:ok, action}
-  defp fetch_if_conflicted({:error, changeset}, _platform_id, _event_key), do: {:error, changeset}
+  defp after_insert({:ok, action}, community, _platform_id, _event_key) do
+    Reputation.record_event_for_action(community, action)
+    {:ok, action}
+  end
+
+  defp after_insert({:error, changeset}, _community, _platform_id, _event_key), do: {:error, changeset}
 end

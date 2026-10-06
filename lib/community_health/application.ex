@@ -16,6 +16,8 @@ defmodule CommunityHealth.Application do
       {Phoenix.PubSub, name: CommunityHealth.PubSub},
       # Start Finch
       {Finch, name: CommunityHealth.Finch},
+      # Runs the CH-Step 8 reputation rollup off the request path
+      {Oban, Application.fetch_env!(:community_health, Oban)},
       # Start the Endpoint (http/https)
       CommunityHealthWeb.Endpoint
       # Start a worker by calling: CommunityHealth.Worker.start_link(arg)

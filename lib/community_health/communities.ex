@@ -13,6 +13,7 @@ defmodule CommunityHealth.Communities do
   alias CommunityHealth.Repo
   alias CommunityHealth.Platforms.Platform
   alias CommunityHealth.Communities.{Community, Membership}
+  alias CommunityHealth.Roles
 
   @doc "Idempotently registers a community under a platform."
   def ensure_community(%Platform{id: platform_id}, external_ref, name) do
@@ -33,10 +34,18 @@ defmodule CommunityHealth.Communities do
     )
   end
 
-  @doc "Idempotently ensures an actor is a member of a community."
+  @doc """
+  Idempotently ensures an actor is a member of a community. A fresh
+  membership is assigned CH-Step 9's default "reader" role; replaying this
+  for an existing member never changes their current role.
+  """
   def ensure_member(%Community{id: community_id}, actor_external_id) do
     %Membership{}
-    |> Membership.changeset(%{community_id: community_id, actor_external_id: actor_external_id})
+    |> Membership.changeset(%{
+      community_id: community_id,
+      actor_external_id: actor_external_id,
+      role_id: reader_role_id()
+    })
     |> Repo.insert(
       on_conflict: :nothing,
       conflict_target: [:community_id, :actor_external_id],
@@ -53,6 +62,21 @@ defmodule CommunityHealth.Communities do
 
       {:ok, membership} ->
         {:ok, membership}
+    end
+  end
+
+  @doc "Looks up an actor's membership row in `community`, or nil."
+  def get_member(%Community{id: community_id}, actor_external_id) do
+    Repo.one(
+      from m in Membership,
+        where: m.community_id == ^community_id and m.actor_external_id == ^actor_external_id
+    )
+  end
+
+  defp reader_role_id do
+    case Roles.get_role_by_code("reader") do
+      nil -> nil
+      role -> role.id
     end
   end
 end

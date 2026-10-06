@@ -29,6 +29,10 @@ config :community_health, CommunityHealthWeb.Endpoint,
   secret_key_base: "zbh6jS6+WpUm4a0fzvB0HFhaPflylrsRjsZP6gp9qyAAyofIIyWzSng5MVwoIqhs",
   server: false
 
+# Reputation-rollup jobs are enqueued with Oban.Testing instead of waiting
+# for a runner, same as Underlined's config/test.exs.
+config :community_health, Oban, testing: :manual, queues: false, plugins: false
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 
