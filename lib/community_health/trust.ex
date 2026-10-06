@@ -8,13 +8,14 @@ defmodule CommunityHealth.Trust do
   membership-row lookup plus `Reputation.get_score/2` is cheap enough that
   a rollup table would be premature.
 
-  `confirmed_violations` is always 0 today — it depends on moderation
-  review (CH-Step 6/7), which is "Not started"; this is wired to read from
-  that step's data the moment it exists, not a placeholder removed later.
+  `confirmed_violations` reads `CommunityHealth.Moderation.count_confirmed_violations/2`
+  (CH-Step 6/7) — a `"violation"` decision whose action was never
+  overturned on appeal.
   """
 
   alias CommunityHealth.Communities
   alias CommunityHealth.Communities.Community
+  alias CommunityHealth.Moderation
   alias CommunityHealth.Reputation
 
   @doc """
@@ -27,9 +28,11 @@ defmodule CommunityHealth.Trust do
         {:error, :actor_not_found}
 
       membership ->
-        account_age_days = NaiveDateTime.diff(NaiveDateTime.utc_now(), membership.inserted_at, :day)
+        account_age_days =
+          NaiveDateTime.diff(NaiveDateTime.utc_now(), membership.inserted_at, :day)
+
         reputation_score = Reputation.get_score(community, actor_external_id).score
-        confirmed_violations = 0
+        confirmed_violations = Moderation.count_confirmed_violations(community, actor_external_id)
 
         {:ok,
          %{

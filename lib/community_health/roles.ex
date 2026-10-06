@@ -17,6 +17,7 @@ defmodule CommunityHealth.Roles do
 
   alias CommunityHealth.Communities
   alias CommunityHealth.Communities.Community
+  alias CommunityHealth.Moderation
   alias CommunityHealth.Repo
   alias CommunityHealth.Reputation
   alias CommunityHealth.Roles.{Permission, Role, RolePermission}
@@ -69,7 +70,11 @@ defmodule CommunityHealth.Roles do
     %{code: "account_age_days", label: "Account age (days)", threshold: 30},
     %{code: "reputation_score", label: "Reputation score", threshold: 250},
     %{code: "confirmed_violations", label: "Confirmed violations (max allowed)", threshold: 1},
-    %{code: "constructive_contributions", label: "Constructive contributions (min)", threshold: 10}
+    %{
+      code: "constructive_contributions",
+      label: "Constructive contributions (min)",
+      threshold: 10
+    }
   ]
 
   @doc """
@@ -88,11 +93,10 @@ defmodule CommunityHealth.Roles do
         current = %{
           "account_age_days" => account_age_days(membership),
           "reputation_score" => Reputation.get_score(community, actor_external_id).score,
-          # No moderation-review system exists yet (CH-Step 6/7 are "Not
-          # started"), so this is always 0 for now — the column this would
-          # read from doesn't exist until that step ships.
-          "confirmed_violations" => 0,
-          "constructive_contributions" => Reputation.count_positive_events(community, actor_external_id)
+          "confirmed_violations" =>
+            Moderation.count_confirmed_violations(community, actor_external_id),
+          "constructive_contributions" =>
+            Reputation.count_positive_events(community, actor_external_id)
         }
 
         requirements =
@@ -101,7 +105,12 @@ defmodule CommunityHealth.Roles do
             Map.merge(req, %{current: value, met: meets?(code, value, threshold)})
           end)
 
-        {:ok, %{role_code: "guardian", eligible: Enum.all?(requirements, & &1.met), requirements: requirements}}
+        {:ok,
+         %{
+           role_code: "guardian",
+           eligible: Enum.all?(requirements, & &1.met),
+           requirements: requirements
+         }}
     end
   end
 

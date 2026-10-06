@@ -33,7 +33,7 @@ config :phoenix, :json_library, Jason
 # triggered it.
 config :community_health, Oban,
   repo: CommunityHealth.Repo,
-  queues: [reputation: 5],
+  queues: [reputation: 5, moderation: 5],
   plugins: [
     {Oban.Plugins.Pruner, max_age: :timer.hours(24 * 7)},
     Oban.Plugins.Lifeline

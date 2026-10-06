@@ -14,12 +14,17 @@ defmodule CommunityHealth.Reports do
   import Ecto.Query
 
   alias CommunityHealth.Communities.Community
+  alias CommunityHealth.Moderation
   alias CommunityHealth.Platforms.Platform
   alias CommunityHealth.Repo
   alias CommunityHealth.Reports.Report
   alias CommunityHealth.Resources
 
-  def submit_report(%Platform{id: platform_id} = platform, %Community{id: community_id}, attrs) do
+  def submit_report(
+        %Platform{id: platform_id} = platform,
+        %Community{id: community_id} = community,
+        attrs
+      ) do
     with {:ok, resource} <-
            Resources.ensure_resource(platform, attrs.resource_type, attrs.resource_ref) do
       %Report{}
@@ -36,11 +41,17 @@ defmodule CommunityHealth.Reports do
         conflict_target: [:platform_id, :resource_id, :reporter_external_id],
         returning: true
       )
-      |> fetch_if_conflicted(platform_id, resource.id, attrs.reporter_external_id)
+      |> after_insert(community, platform_id, resource.id, attrs.reporter_external_id)
     end
   end
 
-  defp fetch_if_conflicted({:ok, %Report{id: nil}}, platform_id, resource_id, reporter_external_id) do
+  defp after_insert(
+         {:ok, %Report{id: nil}},
+         _community,
+         platform_id,
+         resource_id,
+         reporter_external_id
+       ) do
     {:ok,
      Repo.one!(
        from r in Report,
@@ -50,9 +61,20 @@ defmodule CommunityHealth.Reports do
      )}
   end
 
-  defp fetch_if_conflicted({:ok, report}, _platform_id, _resource_id, _reporter_external_id),
-    do: {:ok, report}
+  defp after_insert({:ok, report}, community, _platform_id, _resource_id, _reporter_external_id) do
+    # CH-Step 6: every genuinely new report opens a moderation case —
+    # fire-and-forget, same as Actions.record_action/3's reputation
+    # side-effect, so a case-opening hiccup never blocks report filing.
+    Moderation.open_case_for_report(community, report)
+    {:ok, report}
+  end
 
-  defp fetch_if_conflicted({:error, changeset}, _platform_id, _resource_id, _reporter_external_id),
-    do: {:error, changeset}
+  defp after_insert(
+         {:error, changeset},
+         _community,
+         _platform_id,
+         _resource_id,
+         _reporter_external_id
+       ),
+       do: {:error, changeset}
 end
